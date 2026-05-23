@@ -1,0 +1,188 @@
+cmake_minimum_required(VERSION 3.14)
+project(llama-box-agent C CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+# ============================================================================
+# Options
+# ============================================================================
+option(LLAMA_ALL_WARNINGS   "llama: enable all compiler warnings" ON)
+option(LLAMA_FATAL_WARNINGS "llama: enable -Werror flag"          OFF)
+option(WITH_WHISPER         "Enable whisper.cpp voice input"      OFF)
+option(WITH_SD              "Enable stable-diffusion image gen"   OFF)
+option(WITH_ROBOT           "Enable SimpleSerial robot control"   ON)
+option(WITH_IPCAM           "Enable IP Webcam frame grabber"      ON)
+option(GGML_VULKAN          "Enable Vulkan backend"               OFF)
+
+# ============================================================================
+# llama.cpp flags — BEFORE add_subdirectory
+# ============================================================================
+set(LLAMA_BUILD_COMMON   ON  CACHE BOOL "" FORCE)
+set(LLAMA_BUILD_SERVER   ON  CACHE BOOL "" FORCE)
+set(LLAMA_BUILD_TESTS    OFF CACHE BOOL "" FORCE)
+set(LLAMA_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(LLAMA_CURL           OFF CACHE BOOL "" FORCE)
+set(LLAMA_LLGUIDANCE     OFF CACHE BOOL "" FORCE)
+
+# ============================================================================
+# Paths
+# ============================================================================
+set(LLAMA_SOURCE_DIR    "${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp")
+set(WHISPER_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/whisper.cpp/include")
+set(SD_SOURCE_DIR       "${CMAKE_CURRENT_SOURCE_DIR}/stable-diffusion.cpp")
+
+# ============================================================================
+# llama.cpp — builds llama-server + common + mtmd
+# ============================================================================
+add_subdirectory(${LLAMA_SOURCE_DIR} llama-build)
+set_target_properties(llama PROPERTIES POSITION_INDEPENDENT_CODE ON)
+set_target_properties(ggml  PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+# ============================================================================
+# stable-diffusion.cpp
+# ============================================================================
+if(WITH_SD)
+    set(SD_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+    set(SD_BUILD_EXAMPLES    OFF CACHE BOOL "" FORCE)
+    set(SD_BUILD_TESTS       OFF CACHE BOOL "" FORCE)
+    if(GGML_VULKAN)
+        set(SD_VULKAN ON CACHE BOOL "" FORCE)
+    endif()
+    add_subdirectory(${SD_SOURCE_DIR} sd-build)
+    message(STATUS "Stable diffusion: enabled")
+endif()
+
+# ============================================================================
+# whisper.cpp
+# ============================================================================
+if(WITH_WHISPER)
+    set(WHISPER_BUILD_TESTS    OFF CACHE BOOL "" FORCE)
+    set(WHISPER_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    add_subdirectory(whisper.cpp)
+    message(STATUS "Whisper: enabled")
+endif()
+
+# ============================================================================
+# agent library
+# ============================================================================
+add_library(agent STATIC
+    src/agent.cpp
+    whisper_input.cpp
+    robot_tools.cpp
+)
+target_include_directories(agent PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+    $<BUILD_INTERFACE:${LLAMA_SOURCE_DIR}/common>
+    $<BUILD_INTERFACE:${LLAMA_SOURCE_DIR}/ggml/include>
+    $<BUILD_INTERFACE:${LLAMA_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${LLAMA_SOURCE_DIR}/tools/mtmd>
+    $<BUILD_INTERFACE:${LLAMA_SOURCE_DIR}/vendor>
+)
+target_link_libraries(agent PRIVATE llama-common ggml llama)
+target_compile_features(agent PUBLIC cxx_std_17)
+
+if(WITH_WHISPER)
+    target_include_directories(agent PUBLIC ${WHISPER_INCLUDE_DIR})
+    target_compile_definitions(agent PRIVATE WITH_WHISPER AUDIO_ALSA)
+    target_link_libraries(agent PRIVATE whisper)
+endif()
+
+if(WITH_SD)
+    target_include_directories(agent PUBLIC ${SD_SOURCE_DIR})
+    target_compile_definitions(agent PRIVATE WITH_SD)
+    target_link_libraries(agent PRIVATE stable-diffusion)
+endif()
+
+# ============================================================================
+# model library
+# ============================================================================
+add_library(model STATIC src/model.cpp)
+target_include_directories(model PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+    $<BUILD_INTERFACE:${LLAMA_SOURCE_DIR}/common>
+    $<BUILD_INTERFACE:${LLAMA_SOURCE_DIR}/ggml/include>
+    $<BUILD_INTERFACE:${LLAMA_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${LLAMA_SOURCE_DIR}/vendor>
+)
+target_link_libraries(model PRIVATE llama-common ggml llama)
+target_compile_features(model PUBLIC cxx_std_17)
+
+if(WITH_WHISPER)
+    target_link_libraries(model PRIVATE whisper)
+endif()
+
+if(WITH_SD)
+    target_link_libraries(model PRIVATE stable-diffusion)
+endif()
+
+# ============================================================================
+# llama-box-agent binary
+# ============================================================================
+add_executable(llama-box-agent main.cpp)
+target_include_directories(llama-box-agent PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${LLAMA_SOURCE_DIR}/common
+    ${LLAMA_SOURCE_DIR}/ggml/include
+    ${LLAMA_SOURCE_DIR}/include
+    ${LLAMA_SOURCE_DIR}/tools/mtmd
+)
+target_link_libraries(llama-box-agent PRIVATE
+    agent model llama-common ggml llama
+)
+target_compile_features(llama-box-agent PRIVATE cxx_std_17)
+
+if(WITH_WHISPER)
+    target_link_libraries(llama-box-agent PRIVATE whisper)
+    find_library(ALSA_LIB asound REQUIRED)
+    target_link_libraries(llama-box-agent PRIVATE ${ALSA_LIB})
+endif()
+
+if(WITH_SD)
+    target_include_directories(llama-box-agent PRIVATE ${SD_SOURCE_DIR})
+    target_compile_definitions(llama-box-agent PRIVATE WITH_SD)
+    target_link_libraries(llama-box-agent PRIVATE stable-diffusion)
+endif()
+
+# ============================================================================
+# Robot module
+# ============================================================================
+if(WITH_ROBOT)
+    target_sources(llama-box-agent PRIVATE serial_robot.cpp)
+    target_compile_definitions(llama-box-agent PRIVATE WITH_ROBOT)
+    target_include_directories(llama-box-agent PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    message(STATUS "Robot control: enabled")
+endif()
+
+# ============================================================================
+# IP Webcam module
+# ============================================================================
+if(WITH_IPCAM)
+    target_sources(llama-box-agent PRIVATE ipcam.cpp)
+    target_compile_definitions(llama-box-agent PRIVATE WITH_IPCAM)
+    target_include_directories(llama-box-agent PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    find_package(Threads REQUIRED)
+    target_link_libraries(llama-box-agent PRIVATE Threads::Threads)
+    message(STATUS "IP Webcam: enabled")
+endif()
+
+# ============================================================================
+# Summary
+# ============================================================================
+message(STATUS "")
+message(STATUS "========================================")
+message(STATUS "Build summary:")
+message(STATUS "  llama-server      -> build/bin/llama-server")
+message(STATUS "  llama-box-agent   -> build/bin/llama-box-agent")
+message(STATUS "  Vulkan:    ${GGML_VULKAN}")
+message(STATUS "  Whisper:   ${WITH_WHISPER}")
+message(STATUS "  Stable SD: ${WITH_SD}")
+message(STATUS "  Robot:     ${WITH_ROBOT}")
+message(STATUS "  IP Cam:    ${WITH_IPCAM}")
+message(STATUS "========================================")
+message(STATUS "")
