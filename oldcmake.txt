@@ -3,12 +3,11 @@ project(llama-box-agent C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set(SIMPLEBLE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/simpleble/cmake")
+
 # ============================================================================
 # Options
 # ============================================================================
@@ -23,27 +22,7 @@ option(LLAMA_VULKAN "Enable Vulkan" ON)
 option(SIMPLEBLE "Enable SimpleBLE support" ON)
 # Dependencies
 find_package(OpenCV REQUIRED)
-# ── SimpleBLE — use local copy, point at the simpleble/ subfolder ──────────
-# The SimpleBLE repo has its CMakeLists.txt at simpleble/CMakeLists.txt
-# NOT at the repo root. This is the fix.
-set(SIMPLEBLE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/simpleble/simpleble")
 
-if(EXISTS "${SIMPLEBLE_DIR}/CMakeLists.txt")
-    set(SIMPLEBLE_BUILD_TESTS    OFF CACHE BOOL "" FORCE)
-    set(SIMPLEBLE_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-    set(BUILD_SHARED_LIBS        OFF CACHE BOOL "" FORCE)
-    add_subdirectory(${SIMPLEBLE_DIR} simpleble-build)
-    message(STATUS "SimpleBLE: found at ${SIMPLEBLE_DIR}")
-else()
-    # Fallback — maybe repo root has it
-    set(SIMPLEBLE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/simpleble")
-    if(EXISTS "${SIMPLEBLE_DIR}/CMakeLists.txt")
-        add_subdirectory(${SIMPLEBLE_DIR} simpleble-build)
-        message(STATUS "SimpleBLE: found at root ${SIMPLEBLE_DIR}")
-    else()
-        message(FATAL_ERROR "SimpleBLE not found. Check the path.\nLooked in:\n  ${CMAKE_CURRENT_SOURCE_DIR}/simpleble/simpleble\n  ${CMAKE_CURRENT_SOURCE_DIR}/simpleble\nRun: ls ${CMAKE_CURRENT_SOURCE_DIR}/simpleble/ to check structure.")
-    endif()
-endif()
 
 
 # ============================================================================
@@ -122,7 +101,7 @@ endif()
 # ============================================================================
 # Main executable (llama-box-agent)
 # ============================================================================
-add_executable(llama-box-agent main.cpp   farm_server.cpp ipcam.cpp serial_robot.cpp visual_driver.cpp)
+add_executable(llama-box-agent main.cpp visual_driver.cpp)
 
 target_link_libraries(llama-box-agent PRIVATE 
     agent 
@@ -170,5 +149,4 @@ if(SIMPLEBLE)
 
     if(EXISTS "${SIMPLEBLE_PATH}/CMakeLists.txt")
         message(STATUS "✅ Using local SimpleBLE at: ${SIMPLEBLE_PATH}")
-        endif()
         endif()

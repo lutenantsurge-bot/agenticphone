@@ -9,8 +9,8 @@
 
 // IPCamConfig struct
 struct IPCamConfig {
-    std::string host = "192.168.1.100";
-    int port = 8080;
+    std::string host = "192.168.1.100";//i need to be able to change this with a flag
+    int port = 8080;//same
     bool enabled = false;
     int grab_interval_ms = 500;
 };
