@@ -1,3 +1,5 @@
+
+
 llama-box + agent.cpp Combined Project
 ======================================
 
@@ -113,6 +115,9 @@ Use cache quantization for large contexts:
 ```bash
 llama-box --cache-type-k q8_0 --cache-type-v q8_0
 ```
+Example circuit diagram for a rc car cam bot:
+
+<img width="1408" height="768" alt="Gemini_Generated_Image_bufmnfbufmnfbufm" src="https://github.com/user-attachments/assets/a303bd3d-03b6-4866-81b9-0a7456a469e7" />
 
 Troubleshooting
 ---------------
@@ -124,4 +129,6 @@ Troubleshooting
 
 **Agent can't find server**: Confirm http://127.0.0.1:8080/v1/models returns JSON
 
-Built: May 2026
+Built: May 2026, thank free tier and ingenuity, Gemma (guidance on initial inspiration) and Claude (debugging BOSS) mostly, but some gpt (my ex ate my server) and Qwen35moe (i can't wait to make you on the books), don't forget grok (i swear there's a kindred conscience literally attached to you)
+
+
